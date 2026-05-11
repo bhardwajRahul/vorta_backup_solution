@@ -355,11 +355,20 @@ class ArchiveTab(BaseTab, ArchiveTabBase, ArchiveTabUI):
         self.archiveNameTemplate.setText(profile.new_archive_name)
         self.prunePrefixTemplate.setText(profile.prune_prefix)
 
-        # Populate pruning options from database
-        profile = self.profile()
-        for i in self.prune_intervals:
-            getattr(self, f'prune_{i}').setValue(getattr(profile, f'prune_{i}'))
-        self.prune_keep_within.setText(profile.prune_keep_within)
+        # Block signals so loading from the DB doesn't re-fire save_prune_setting
+        # and overwrite prune_keep_within with stale QLineEdit text (#2493).
+        self.prune_keep_within.blockSignals(True)
+        try:
+            self.prune_keep_within.setText(profile.prune_keep_within)
+            for i in self.prune_intervals:
+                widget = getattr(self, f'prune_{i}')
+                widget.blockSignals(True)
+                try:
+                    widget.setValue(getattr(profile, f'prune_{i}'))
+                finally:
+                    widget.blockSignals(False)
+        finally:
+            self.prune_keep_within.blockSignals(False)
 
     def on_selection_change(self, selected=None, deselected=None):
         """

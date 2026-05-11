@@ -33,6 +33,35 @@ def test_prune_intervals(qapp, qtbot):
         assert getattr(profile, f'prune_{i}') == 9
 
 
+def test_populate_does_not_overwrite_prune_keep_within(qapp, qtbot):
+    """Loading a profile must not fire save_prune_setting and overwrite
+    prune_keep_within with stale QLineEdit text (#2493)."""
+    main = qapp.main_window
+    tab = main.archiveTab
+    profile = BackupProfileModel.get(id=1)
+    profile.prune_keep_within = '10H'
+    profile.prune_hour = 7
+    profile.save()
+
+    # Simulate stale UI state: a spinbox value differs from the DB (so the
+    # setValue call inside populate_from_profile would otherwise fire
+    # valueChanged -> save_prune_setting) and the prune_keep_within QLineEdit
+    # holds stale text from another profile. Block signals while setting this
+    # up so the pre-state itself doesn't overwrite the DB values just saved.
+    tab.prune_hour.blockSignals(True)
+    try:
+        tab.prune_hour.setValue(1)
+    finally:
+        tab.prune_hour.blockSignals(False)
+    tab.prune_keep_within.setText('')
+
+    tab.populate_from_profile()
+
+    profile = profile.refresh()
+    assert profile.prune_keep_within == '10H'
+    assert tab.prune_keep_within.text() == '10H'
+
+
 def test_repo_list(qapp, qtbot, mocker, borg_json_output, archive_env):
     main, tab = archive_env
 
